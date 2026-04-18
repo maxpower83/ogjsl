@@ -8,21 +8,20 @@
     <style>
         .calendar-grid {
             display: grid;
-            grid-template-columns: repeat(7, 1fr); /* 7 columnas iguales obligatorias */
+            grid-template-columns: repeat(7, 1fr); /* 7 columnas exactas */
             width: 100%;
             border-left: 1px solid #e5e7eb;
             border-top: 1px solid #e5e7eb;
+            background-color: #e5e7eb; /* Color de las líneas divisorias */
+            gap: 1px; /* Espacio para simular bordes internos */
         }
         .calendar-day {
-            aspect-ratio: 1 / 1;
             min-height: 120px;
-            border-right: 1px solid #e5e7eb;
-            border-bottom: 1px solid #e5e7eb;
             padding: 8px;
             background-color: #fff;
-            position: relative;
             display: flex;
             flex-direction: column;
+            transition: background-color 0.2s;
         }
         .day-header {
             font-size: 0.75rem;
@@ -33,13 +32,14 @@
         }
         .event-container {
             flex-grow: 1;
-            overflow-y: visible;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
         .event-card {
             font-size: 0.7rem;
             line-height: 1.2;
             padding: 4px 6px;
-            margin-bottom: 4px;
             border-radius: 4px;
             background-color: #eff6ff;
             border: 1px solid #bfdbfe;
@@ -49,16 +49,13 @@
             overflow: hidden;
             text-overflow: ellipsis;
             transition: all 0.2s ease;
-            position: relative;
-            z-index: 1;
         }
         .event-card:hover {
             white-space: normal;
             background-color: #dbeafe;
-            z-index: 50;
-            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
-            height: auto;
-            min-height: fit-content;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            position: relative;
+            z-index: 10;
         }
         .current-day {
             background-color: #fefce8;
@@ -76,27 +73,20 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            text-align: center;
-            padding: 20px;
         }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-900">
 
 <div id="loading" class="loading-overlay">
-    <div id="spinner" class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-    <div id="loadingText" class="text-sm font-medium text-gray-600">Sincronizando audiencias...</div>
-    <div id="errorInstructions" class="hidden mt-4 p-4 bg-red-50 border border-red-200 rounded-lg max-w-md">
-        <p class="text-red-700 font-bold mb-2">Error de conexión</p>
-        <p class="text-xs text-red-600 mb-4">No se pudo obtener la información. Verifique la conexión o el estado de la planilla pública.</p>
-        <button onclick="location.reload()" class="bg-red-600 text-white px-4 py-2 rounded text-xs font-bold">Reintentar</button>
-    </div>
+    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+    <div class="text-sm font-medium text-gray-600">Sincronizando audiencias...</div>
 </div>
 
 <input type="hidden" id="csvUrl" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vTiYlQcx2Ix6HBhosnbGJH4oEG_A6faRFZRK1v5gfMHNxuqwJidrIIHVlX9EMbvV8MQbaxGWbE_45jd/pub?gid=0&single=true&output=csv" />
 
 <div class="max-w-[1400px] mx-auto p-4">
-    <header class="flex flex-col md:flex-row justify-between items-center mb-6 bg-white p-4 rounded-xl shadow-sm gap-4">
+    <header class="flex flex-col md:flex-row justify-between items-center mb-6 bg-white p-4 rounded-xl shadow-sm gap-4 border border-gray-200">
         <div>
             <h1 class="text-2xl font-bold text-slate-800">Calendario de Audiencias</h1>
             <p id="currentMonthDisplay" class="text-blue-600 font-medium tracking-tight uppercase"></p>
@@ -106,38 +96,37 @@
             <button onclick="changeMonth(-1)" class="p-2 hover:bg-gray-100 rounded-full transition-colors">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
-            <button onclick="setToday()" class="px-4 py-2 border rounded-md text-sm hover:bg-gray-50 font-medium">Hoy</button>
+            <button onclick="setToday()" class="px-4 py-2 border rounded-md text-sm hover:bg-gray-50 font-medium bg-white">Hoy</button>
             <button onclick="changeMonth(1)" class="p-2 hover:bg-gray-100 rounded-full transition-colors">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
         </div>
 
-        <div class="hidden md:block">
-            <span class="text-[10px] text-gray-400 bg-gray-50 px-2 py-1 rounded border uppercase font-bold">Sincronización Automática</span>
+        <div class="hidden md:block text-right">
+            <span class="text-[10px] text-gray-400 bg-gray-50 px-2 py-1 rounded border uppercase font-bold tracking-tighter">Sincronización en Tiempo Real</span>
         </div>
     </header>
 
     <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
         <div>
             <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Juez</label>
-            <select id="filterJuez" onchange="applyFilters()" class="w-full border p-2 rounded-md text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500"></select>
+            <select id="filterJuez" onchange="applyFilters()" class="w-full border p-2 rounded-md text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"></select>
         </div>
         <div>
             <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Fiscal</label>
-            <select id="filterFiscal" onchange="applyFilters()" class="w-full border p-2 rounded-md text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500"></select>
+            <select id="filterFiscal" onchange="applyFilters()" class="w-full border p-2 rounded-md text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"></select>
         </div>
         <div>
             <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">MPD</label>
-            <select id="filterMPD" onchange="applyFilters()" class="w-full border p-2 rounded-md text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500"></select>
+            <select id="filterMPD" onchange="applyFilters()" class="w-full border p-2 rounded-md text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"></select>
         </div>
         <div>
             <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Abog. Partic.</label>
-            <select id="filterAbog" onchange="applyFilters()" class="w-full border p-2 rounded-md text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500"></select>
+            <select id="filterAbog" onchange="applyFilters()" class="w-full border p-2 rounded-md text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none"></select>
         </div>
     </section>
 
     <div class="bg-white rounded-xl shadow-xl overflow-hidden border border-gray-200">
-        <!-- Encabezados de días integrados en el grid de 7 columnas -->
         <div class="grid grid-cols-7 bg-gray-100 border-b border-gray-200">
             <div class="py-3 text-center text-[10px] font-bold text-gray-500 uppercase">Dom</div>
             <div class="py-3 text-center text-[10px] font-bold text-gray-500 uppercase">Lun</div>
@@ -168,163 +157,117 @@
 <script>
     let allAudiencias = [];
     let currentViewDate = new Date();
-    
-    const fields = [
-        "CUIJ", "IMPUTADO", "TIPO DE AUDIENCIA", "FECHA AGENDAMIENTO", 
-        "HORA PROGRAMADA INICIO", "SALA", "UBICACION IMPUTADO", 
-        "JUEZ", "FISCAL", "MPD", "ABOG. PARTIC."
-    ];
+    const fields = ["CUIJ", "IMPUTADO", "TIPO DE AUDIENCIA", "FECHA AGENDAMIENTO", "HORA PROGRAMADA INICIO", "SALA", "UBICACION IMPUTADO", "JUEZ", "FISCAL", "MPD", "ABOG. PARTIC."];
 
     async function fetchData() {
-        const url = document.getElementById('csvUrl').value;
-        const loadingOverlay = document.getElementById('loading');
-        const errorInstructions = document.getElementById('errorInstructions');
-
-        loadingOverlay.style.display = 'flex';
-        errorInstructions.classList.add('hidden');
-
+        const loading = document.getElementById('loading');
+        loading.style.display = 'flex';
         try {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error("Error en red");
-            
-            const text = await response.text();
-            const rows = parseCsvRobust(text);
-            
-            if (rows.length < 2) throw new Error("Sin datos");
-
+            const url = document.getElementById('csvUrl').value;
+            const res = await fetch(url);
+            const text = await res.text();
+            const rows = parseCsv(text);
             const headers = rows[0].map(h => h.trim().toUpperCase());
-            
             allAudiencias = rows.slice(1).map(row => {
                 let obj = {};
                 headers.forEach((h, i) => { obj[h] = row[i] ? row[i].trim() : ""; });
                 return obj;
             }).filter(a => a["FECHA AGENDAMIENTO"]);
-
             populateFilters();
             renderCalendar();
-            loadingOverlay.style.display = 'none';
-        } catch (e) {
-            console.error(e);
-            document.getElementById('spinner').classList.add('hidden');
-            document.getElementById('loadingText').classList.add('hidden');
-            errorInstructions.classList.remove('hidden');
-        }
+        } catch (e) { console.error(e); }
+        loading.style.display = 'none';
     }
 
-    function parseCsvRobust(text) {
+    function parseCsv(text) {
         const rows = [];
         const lines = text.split(/\r?\n/);
         lines.forEach(line => {
             if (!line.trim()) return;
             const row = [];
             let inQuotes = false;
-            let currentValue = '';
+            let current = '';
             for (let i = 0; i < line.length; i++) {
-                const char = line[i];
-                if (char === '"') inQuotes = !inQuotes;
-                else if (char === ',' && !inQuotes) {
-                    row.push(currentValue);
-                    currentValue = '';
-                } else currentValue += char;
+                if (line[i] === '"') inQuotes = !inQuotes;
+                else if (line[i] === ',' && !inQuotes) { row.push(current); current = ''; }
+                else current += line[i];
             }
-            row.push(currentValue);
+            row.push(current);
             rows.push(row);
         });
         return rows;
     }
 
-    function splitNames(cellContent) {
-        if (!cellContent) return [];
-        return cellContent.split(',').map(name => name.trim()).filter(name => name.length > 2);
-    }
+    function splitNames(val) { return val ? val.split(',').map(n => n.trim()).filter(n => n.length > 2) : []; }
 
     function populateFilters() {
         const config = { 'filterJuez': 'JUEZ', 'filterFiscal': 'FISCAL', 'filterMPD': 'MPD', 'filterAbog': 'ABOG. PARTIC.' };
         Object.entries(config).forEach(([id, field]) => {
             const select = document.getElementById(id);
-            const allNames = [];
-            allAudiencias.forEach(a => splitNames(a[field]).forEach(n => allNames.push(n)));
-            const uniqueValues = [...new Set(allNames)].sort();
-            select.innerHTML = '<option value="">Todos</option>';
-            uniqueValues.forEach(val => {
-                const opt = document.createElement('option');
-                opt.value = val; opt.innerText = val;
-                select.appendChild(opt);
-            });
+            const names = new Set();
+            allAudiencias.forEach(a => splitNames(a[field]).forEach(n => names.add(n)));
+            select.innerHTML = '<option value="">Todos</option>' + [...names].sort().map(n => `<option value="${n}">${n}</option>`).join('');
         });
     }
 
     function renderCalendar() {
         const grid = document.getElementById('calendarGrid');
         grid.innerHTML = '';
-        
-        const year = currentViewDate.getFullYear();
-        const month = currentViewDate.getMonth();
-        
-        const monthTitle = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(currentViewDate);
-        document.getElementById('currentMonthDisplay').innerText = monthTitle;
+        const y = currentViewDate.getFullYear();
+        const m = currentViewDate.getMonth();
+        document.getElementById('currentMonthDisplay').innerText = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(currentViewDate);
 
-        const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0=Dom, 1=Lun...
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        const prevMonthLastDay = new Date(year, month, 0).getDate();
+        const firstDay = new Date(y, m, 1).getDay(); // 0=Dom, 1=Lun...
+        const daysInMonth = new Date(y, m + 1, 0).getDate();
+        const prevMonthLast = new Date(y, m, 0).getDate();
 
-        const fJ = document.getElementById('filterJuez').value;
-        const fF = document.getElementById('filterFiscal').value;
-        const fM = document.getElementById('filterMPD').value;
-        const fA = document.getElementById('filterAbog').value;
+        const filters = {
+            j: document.getElementById('filterJuez').value,
+            f: document.getElementById('filterFiscal').value,
+            m: document.getElementById('filterMPD').value,
+            a: document.getElementById('filterAbog').value
+        };
 
         const filtered = allAudiencias.filter(a => {
             const match = (f, v) => !f || splitNames(v).includes(f);
-            return match(fJ, a['JUEZ']) && match(fF, a['FISCAL']) && match(fM, a['MPD']) && match(fA, a['ABOG. PARTIC.']);
+            return match(filters.j, a['JUEZ']) && match(filters.f, a['FISCAL']) && match(filters.m, a['MPD']) && match(filters.a, a['ABOG. PARTIC.']);
         });
 
         // Días mes anterior
-        for (let i = firstDayOfMonth - 1; i >= 0; i--) createDayCell(prevMonthLastDay - i, true);
-
+        for (let i = firstDay - 1; i >= 0; i--) createCell(prevMonthLast - i, true);
+        
         // Días mes actual
         for (let i = 1; i <= daysInMonth; i++) {
-            const dayEvents = filtered.filter(a => {
-                const f = a['FECHA AGENDAMIENTO'];
-                if (!f) return false;
-                let d, m, y;
-                if (f.includes('-')) [y, m, d] = f.split('-');
-                else if (f.includes('/')) [d, m, y] = f.split('/');
-                return parseInt(y) === year && parseInt(m) === (month + 1) && parseInt(d) === i;
-            });
-            dayEvents.sort((a, b) => (a['HORA PROGRAMADA INICIO'] || "").localeCompare(b['HORA PROGRAMADA INICIO'] || ""));
-            createDayCell(i, false, dayEvents);
+            const evs = filtered.filter(a => {
+                const parts = a['FECHA AGENDAMIENTO'].includes('-') ? a['FECHA AGENDAMIENTO'].split('-') : a['FECHA AGENDAMIENTO'].split('/');
+                const [d, mon, yr] = a['FECHA AGENDAMIENTO'].includes('/') ? [parts[0], parts[1], parts[2]] : [parts[2], parts[1], parts[0]];
+                return parseInt(yr) === y && parseInt(mon) === (m + 1) && parseInt(d) === i;
+            }).sort((a,b) => (a['HORA PROGRAMADA INICIO'] || "").localeCompare(b['HORA PROGRAMADA INICIO'] || ""));
+            createCell(i, false, evs);
         }
-        
-        // Días mes siguiente para completar grid de 6 semanas (42 celdas)
-        const totalShown = firstDayOfMonth + daysInMonth;
-        const remaining = 42 - totalShown;
-        for (let i = 1; i <= remaining; i++) createDayCell(i, true);
+
+        // Rellenar hasta completar la última semana
+        const totalCells = firstDay + daysInMonth;
+        const remaining = (7 - (totalCells % 7)) % 7;
+        for (let i = 1; i <= remaining; i++) createCell(i, true);
     }
 
-    function createDayCell(dayNumber, isOtherMonth, events = []) {
-        const grid = document.getElementById('calendarGrid');
+    function createCell(num, isOther, evs = []) {
         const cell = document.createElement('div');
-        cell.className = `calendar-day ${isOtherMonth ? 'other-month' : ''}`;
-        
+        cell.className = `calendar-day ${isOther ? 'other-month' : ''}`;
         const today = new Date();
-        if (!isOtherMonth && dayNumber === today.getDate() && currentViewDate.getMonth() === today.getMonth() && currentViewDate.getFullYear() === today.getFullYear()) {
-            cell.classList.add('current-day');
-        }
-
-        cell.innerHTML = `<div class="day-header">${dayNumber}</div>`;
-        const container = document.createElement('div');
-        container.className = "event-container";
+        if (!isOther && num === today.getDate() && currentViewDate.getMonth() === today.getMonth() && currentViewDate.getFullYear() === today.getFullYear()) cell.classList.add('current-day');
         
-        events.forEach(ev => {
-            const evEl = document.createElement('div');
-            evEl.className = 'event-card';
-            evEl.innerHTML = `<strong>${ev['HORA PROGRAMADA INICIO'] || '--:--'}</strong> ${ev['IMPUTADO'] || 'N/A'}`;
-            evEl.onclick = (e) => { e.stopPropagation(); showDetail(ev); };
-            container.appendChild(evEl);
+        cell.innerHTML = `<div class="day-header">${num}</div><div class="event-container"></div>`;
+        const container = cell.querySelector('.event-container');
+        evs.forEach(ev => {
+            const el = document.createElement('div');
+            el.className = 'event-card';
+            el.innerHTML = `<strong>${ev['HORA PROGRAMADA INICIO'] || '--:--'}</strong> ${ev['IMPUTADO'] || 'N/A'}`;
+            el.onclick = (e) => { e.stopPropagation(); showDetail(ev); };
+            container.appendChild(el);
         });
-        
-        cell.appendChild(container);
-        grid.appendChild(cell);
+        document.getElementById('calendarGrid').appendChild(cell);
     }
 
     function showDetail(ev) {
@@ -332,29 +275,22 @@
         const container = document.getElementById('modalContainer');
         document.getElementById('modalTitle').innerText = ev['IMPUTADO'] || 'Detalle';
         document.getElementById('modalSubtitle').innerText = ev['TIPO DE AUDIENCIA'] || 'Audiencia';
-        const content = document.getElementById('modalContent');
-        content.innerHTML = fields.map(f => `
+        document.getElementById('modalContent').innerHTML = fields.map(f => `
             <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
                 <span class="text-[9px] uppercase font-bold text-gray-400 block tracking-widest">${f}</span>
                 <span class="text-sm text-slate-700 font-semibold">${ev[f] || '—'}</span>
             </div>
         `).join('');
-        
         modal.classList.remove('hidden');
-        setTimeout(() => {
-            container.classList.remove('scale-95', 'opacity-0');
-            container.classList.add('scale-100', 'opacity-100');
-        }, 10);
+        setTimeout(() => container.classList.replace('opacity-0', 'opacity-100'), 10);
     }
 
     function closeModal() {
-        const container = document.getElementById('modalContainer');
-        container.classList.remove('scale-100', 'opacity-100');
-        container.classList.add('scale-95', 'opacity-0');
-        setTimeout(() => { document.getElementById('modal').classList.add('hidden'); }, 200);
+        document.getElementById('modalContainer').classList.replace('opacity-100', 'opacity-0');
+        setTimeout(() => document.getElementById('modal').classList.add('hidden'), 200);
     }
 
-    function changeMonth(delta) { currentViewDate.setMonth(currentViewDate.getMonth() + delta); renderCalendar(); }
+    function changeMonth(d) { currentViewDate.setMonth(currentViewDate.getMonth() + d); renderCalendar(); }
     function setToday() { currentViewDate = new Date(); renderCalendar(); }
     function applyFilters() { renderCalendar(); }
     window.onload = fetchData;
