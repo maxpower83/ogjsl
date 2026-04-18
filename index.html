@@ -8,12 +8,12 @@
     <style>
         .calendar-grid {
             display: grid;
-            grid-template-columns: repeat(7, 1fr); /* 7 columnas exactas */
+            grid-template-columns: repeat(7, minmax(0, 1fr)); /* 7 columnas estrictas con ancho mínimo */
             width: 100%;
             border-left: 1px solid #e5e7eb;
             border-top: 1px solid #e5e7eb;
-            background-color: #e5e7eb; /* Color de las líneas divisorias */
-            gap: 1px; /* Espacio para simular bordes internos */
+            background-color: #e5e7eb; 
+            gap: 1px; 
         }
         .calendar-day {
             min-height: 120px;
@@ -21,7 +21,7 @@
             background-color: #fff;
             display: flex;
             flex-direction: column;
-            transition: background-color 0.2s;
+            width: 100%; /* Asegura que ocupe todo el espacio asignado por el grid */
         }
         .day-header {
             font-size: 0.75rem;
@@ -127,6 +127,7 @@
     </section>
 
     <div class="bg-white rounded-xl shadow-xl overflow-hidden border border-gray-200">
+        <!-- Header de días forzado a 7 columnas -->
         <div class="grid grid-cols-7 bg-gray-100 border-b border-gray-200">
             <div class="py-3 text-center text-[10px] font-bold text-gray-500 uppercase">Dom</div>
             <div class="py-3 text-center text-[10px] font-bold text-gray-500 uppercase">Lun</div>
@@ -136,6 +137,7 @@
             <div class="py-3 text-center text-[10px] font-bold text-gray-500 uppercase">Vie</div>
             <div class="py-3 text-center text-[10px] font-bold text-gray-500 uppercase">Sáb</div>
         </div>
+        <!-- Grid principal -->
         <div id="calendarGrid" class="calendar-grid"></div>
     </div>
 </div>
@@ -233,33 +235,48 @@
             return match(filters.j, a['JUEZ']) && match(filters.f, a['FISCAL']) && match(filters.m, a['MPD']) && match(filters.a, a['ABOG. PARTIC.']);
         });
 
-        // Días mes anterior
-        for (let i = firstDay - 1; i >= 0; i--) createCell(prevMonthLast - i, true);
+        // 1. Días del mes anterior (relleno)
+        for (let i = firstDay - 1; i >= 0; i--) {
+            createCell(prevMonthLast - i, true);
+        }
         
-        // Días mes actual
+        // 2. Días del mes actual
         for (let i = 1; i <= daysInMonth; i++) {
             const evs = filtered.filter(a => {
                 const parts = a['FECHA AGENDAMIENTO'].includes('-') ? a['FECHA AGENDAMIENTO'].split('-') : a['FECHA AGENDAMIENTO'].split('/');
-                const [d, mon, yr] = a['FECHA AGENDAMIENTO'].includes('/') ? [parts[0], parts[1], parts[2]] : [parts[2], parts[1], parts[0]];
+                let d, mon, yr;
+                if (a['FECHA AGENDAMIENTO'].includes('/')) {
+                    [d, mon, yr] = [parts[0], parts[1], parts[2]];
+                } else {
+                    [yr, mon, d] = [parts[0], parts[1], parts[2]];
+                }
                 return parseInt(yr) === y && parseInt(mon) === (m + 1) && parseInt(d) === i;
             }).sort((a,b) => (a['HORA PROGRAMADA INICIO'] || "").localeCompare(b['HORA PROGRAMADA INICIO'] || ""));
+            
             createCell(i, false, evs);
         }
 
-        // Rellenar hasta completar la última semana
-        const totalCells = firstDay + daysInMonth;
-        const remaining = (7 - (totalCells % 7)) % 7;
-        for (let i = 1; i <= remaining; i++) createCell(i, true);
+        // 3. Rellenar hasta completar 42 celdas para mantener el grid estable (6 filas de 7)
+        const totalShown = firstDay + daysInMonth;
+        const remaining = 42 - totalShown;
+        for (let i = 1; i <= remaining; i++) {
+            createCell(i, true);
+        }
     }
 
     function createCell(num, isOther, evs = []) {
+        const grid = document.getElementById('calendarGrid');
         const cell = document.createElement('div');
         cell.className = `calendar-day ${isOther ? 'other-month' : ''}`;
+        
         const today = new Date();
-        if (!isOther && num === today.getDate() && currentViewDate.getMonth() === today.getMonth() && currentViewDate.getFullYear() === today.getFullYear()) cell.classList.add('current-day');
+        if (!isOther && num === today.getDate() && currentViewDate.getMonth() === today.getMonth() && currentViewDate.getFullYear() === today.getFullYear()) {
+            cell.classList.add('current-day');
+        }
         
         cell.innerHTML = `<div class="day-header">${num}</div><div class="event-container"></div>`;
         const container = cell.querySelector('.event-container');
+        
         evs.forEach(ev => {
             const el = document.createElement('div');
             el.className = 'event-card';
@@ -267,7 +284,8 @@
             el.onclick = (e) => { e.stopPropagation(); showDetail(ev); };
             container.appendChild(el);
         });
-        document.getElementById('calendarGrid').appendChild(cell);
+        
+        grid.appendChild(cell);
     }
 
     function showDetail(ev) {
