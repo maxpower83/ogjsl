@@ -11,26 +11,35 @@
             grid-template-columns: repeat(7, 1fr);
             border-left: 1px solid #e5e7eb;
             border-top: 1px solid #e5e7eb;
+            width: 100%;
         }
         .calendar-day {
+            aspect-ratio: 1 / 1; /* Mantiene proporciones cuadradas */
             min-height: 120px;
             border-right: 1px solid #e5e7eb;
             border-bottom: 1px solid #e5e7eb;
-            padding: 4px;
+            padding: 8px;
             background-color: #fff;
+            position: relative;
+            display: flex;
+            flex-direction: column;
         }
         .day-header {
             font-size: 0.75rem;
             font-weight: bold;
             color: #6b7280;
             text-align: right;
-            padding-bottom: 4px;
+            margin-bottom: 4px;
+        }
+        .event-container {
+            flex-grow: 1;
+            overflow-y: visible; /* Permite que el hover se expanda */
         }
         .event-card {
             font-size: 0.7rem;
-            line-height: 1.1;
-            padding: 4px;
-            margin-bottom: 2px;
+            line-height: 1.2;
+            padding: 4px 6px;
+            margin-bottom: 4px;
             border-radius: 4px;
             background-color: #eff6ff;
             border: 1px solid #bfdbfe;
@@ -39,12 +48,17 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            transition: all 0.2s ease;
+            position: relative;
+            z-index: 1;
         }
         .event-card:hover {
-            background-color: #dbeafe;
             white-space: normal;
-            z-index: 10;
-            position: relative;
+            background-color: #dbeafe;
+            z-index: 50;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            height: auto;
+            min-height: fit-content;
         }
         .current-day {
             background-color: #fefce8;
@@ -57,7 +71,7 @@
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(255,255,255,0.85);
+            background: rgba(255,255,255,0.9);
             z-index: 100;
             flex-direction: column;
             align-items: center;
@@ -71,23 +85,22 @@
 
 <div id="loading" class="loading-overlay">
     <div id="spinner" class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-    <div id="loadingText" class="text-sm font-medium text-gray-600">Sincronizando con Google Sheets...</div>
+    <div id="loadingText" class="text-sm font-medium text-gray-600">Sincronizando audiencias...</div>
     <div id="errorInstructions" class="hidden mt-4 p-4 bg-red-50 border border-red-200 rounded-lg max-w-md">
-        <p class="text-red-700 font-bold mb-2">Error de conexión (CORS)</p>
-        <p class="text-xs text-red-600 mb-4">Si estás ejecutando este archivo localmente, el navegador bloquea la conexión por seguridad.</p>
-        <div class="text-left text-xs text-gray-700 space-y-2">
-            <p><strong>Solución A:</strong> Sube este archivo HTML a un hosting (GitHub Pages, Netlify, etc).</p>
-            <p><strong>Solución B:</strong> Instala la extensión "Allow CORS" en Chrome y actívala.</p>
-        </div>
-        <button onclick="location.reload()" class="mt-4 bg-red-600 text-white px-4 py-2 rounded text-xs font-bold">Reintentar</button>
+        <p class="text-red-700 font-bold mb-2">Error de conexión</p>
+        <p class="text-xs text-red-600 mb-4">No se pudo obtener la información. Verifique la conexión o el estado de la planilla pública.</p>
+        <button onclick="location.reload()" class="bg-red-600 text-white px-4 py-2 rounded text-xs font-bold">Reintentar</button>
     </div>
 </div>
+
+<!-- Input oculto para la URL de datos (Operación interna) -->
+<input type="hidden" id="csvUrl" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vTiYlQcx2Ix6HBhosnbGJH4oEG_A6faRFZRK1v5gfMHNxuqwJidrIIHVlX9EMbvV8MQbaxGWbE_45jd/pub?gid=0&single=true&output=csv" />
 
 <div class="max-w-[1400px] mx-auto p-4">
     <header class="flex flex-col md:flex-row justify-between items-center mb-6 bg-white p-4 rounded-xl shadow-sm gap-4">
         <div>
             <h1 class="text-2xl font-bold text-slate-800">Calendario de Audiencias</h1>
-            <p id="currentMonthDisplay" class="text-blue-600 font-medium"></p>
+            <p id="currentMonthDisplay" class="text-blue-600 font-medium tracking-tight"></p>
         </div>
         
         <div class="flex items-center gap-2">
@@ -100,31 +113,27 @@
             </button>
         </div>
 
-        <div class="flex flex-col gap-1">
-            <div class="flex gap-2">
-                <input type="text" id="csvUrl" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vTiYlQcx2Ix6HBhosnbGJH4oEG_A6faRFZRK1v5gfMHNxuqwJidrIIHVlX9EMbvV8MQbaxGWbE_45jd/pub?gid=0&single=true&output=csv" class="text-sm p-2 border rounded-md w-64 focus:ring-2 focus:ring-blue-500 outline-none" />
-                <button onclick="fetchData()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-bold transition-colors">Sincronizar</button>
-            </div>
-            <span class="text-[10px] text-gray-400">Datos cargados desde la hoja AUDIENCIAS</span>
+        <div class="hidden md:block">
+            <span class="text-[10px] text-gray-400 bg-gray-50 px-2 py-1 rounded border">Sincronización Automática Activa</span>
         </div>
     </header>
 
     <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
         <div>
             <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Juez</label>
-            <select id="filterJuez" onchange="applyFilters()" class="w-full border p-2 rounded-md text-sm bg-gray-50"></select>
+            <select id="filterJuez" onchange="applyFilters()" class="w-full border p-2 rounded-md text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500"></select>
         </div>
         <div>
             <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Fiscal</label>
-            <select id="filterFiscal" onchange="applyFilters()" class="w-full border p-2 rounded-md text-sm bg-gray-50"></select>
+            <select id="filterFiscal" onchange="applyFilters()" class="w-full border p-2 rounded-md text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500"></select>
         </div>
         <div>
             <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">MPD</label>
-            <select id="filterMPD" onchange="applyFilters()" class="w-full border p-2 rounded-md text-sm bg-gray-50"></select>
+            <select id="filterMPD" onchange="applyFilters()" class="w-full border p-2 rounded-md text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500"></select>
         </div>
         <div>
             <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Abog. Partic.</label>
-            <select id="filterAbog" onchange="applyFilters()" class="w-full border p-2 rounded-md text-sm bg-gray-50"></select>
+            <select id="filterAbog" onchange="applyFilters()" class="w-full border p-2 rounded-md text-sm bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500"></select>
         </div>
     </section>
 
@@ -142,14 +151,14 @@
     </div>
 </div>
 
-<div id="modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl transform transition-all">
+<div id="modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl transform transition-all scale-95 opacity-0" id="modalContainer">
         <div class="flex justify-between items-start mb-4 border-b pb-4">
             <div>
                 <h2 id="modalTitle" class="text-xl font-bold text-slate-800"></h2>
                 <p id="modalSubtitle" class="text-sm text-blue-600 font-medium"></p>
             </div>
-            <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+            <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
         </div>
         <div id="modalContent" class="grid grid-cols-1 gap-4 max-h-[60vh] overflow-y-auto pr-2"></div>
         <button onclick="closeModal()" class="mt-6 w-full bg-slate-800 text-white hover:bg-slate-900 py-3 rounded-xl font-bold transition-colors">Cerrar</button>
@@ -167,7 +176,7 @@
     ];
 
     async function fetchData() {
-        const url = document.getElementById('csvUrl').value.trim();
+        const url = document.getElementById('csvUrl').value;
         const loadingOverlay = document.getElementById('loading');
         const errorInstructions = document.getElementById('errorInstructions');
         const spinner = document.getElementById('spinner');
@@ -230,9 +239,6 @@
         return rows;
     }
 
-    /**
-     * Extrae nombres individuales de una celda que puede contener varios separados por comas
-     */
     function splitNames(cellContent) {
         if (!cellContent) return [];
         return cellContent.split(',')
@@ -250,8 +256,6 @@
 
         Object.entries(config).forEach(([id, field]) => {
             const select = document.getElementById(id);
-            
-            // Extraer todos los nombres individuales de todas las filas
             const allNames = [];
             allAudiencias.forEach(a => {
                 const namesInCell = splitNames(a[field]);
@@ -259,7 +263,6 @@
             });
 
             const uniqueValues = [...new Set(allNames)].sort();
-            
             select.innerHTML = '<option value="">Todos</option>';
             uniqueValues.forEach(val => {
                 const opt = document.createElement('option');
@@ -290,17 +293,12 @@
         const fA = document.getElementById('filterAbog').value;
 
         const filtered = allAudiencias.filter(a => {
-            // Lógica de coincidencia parcial para manejar nombres individuales dentro de una celda con múltiples nombres
             const match = (filterValue, cellValue) => {
                 if (!filterValue) return true;
                 const namesInCell = splitNames(cellValue);
                 return namesInCell.includes(filterValue);
             };
-
-            return match(fJ, a['JUEZ']) &&
-                   match(fF, a['FISCAL']) &&
-                   match(fM, a['MPD']) &&
-                   match(fA, a['ABOG. PARTIC.']);
+            return match(fJ, a['JUEZ']) && match(fF, a['FISCAL']) && match(fM, a['MPD']) && match(fA, a['ABOG. PARTIC.']);
         });
 
         for (let i = firstDayOfMonth - 1; i >= 0; i--) createDayCell(prevMonthLastDay - i, true);
@@ -318,8 +316,8 @@
             createDayCell(i, false, dayEvents);
         }
         
-        const totalCells = firstDayOfMonth + daysInMonth;
-        const remaining = 42 - totalCells;
+        const totalCellsShown = firstDayOfMonth + daysInMonth;
+        const remaining = 42 - totalCellsShown;
         for (let i = 1; i <= remaining; i++) createDayCell(i, true);
     }
 
@@ -335,15 +333,15 @@
 
         cell.innerHTML = `<div class="day-header">${dayNumber}</div>`;
         const eventContainer = document.createElement('div');
-        eventContainer.className = "flex flex-col gap-1 overflow-y-auto max-h-[90px]";
+        eventContainer.className = "event-container";
         
         events.forEach(ev => {
             const evEl = document.createElement('div');
             evEl.className = 'event-card';
             const hora = ev['HORA PROGRAMADA INICIO'] || '--:--';
-            const imputado = ev['IMPUTADO'] || 'SIN NOMBRE';
+            const imputado = ev['IMPUTADO'] || 'N/A';
             evEl.innerHTML = `<strong>${hora}</strong> ${imputado}`;
-            evEl.onclick = () => showDetail(ev);
+            evEl.onclick = (e) => { e.stopPropagation(); showDetail(ev); };
             eventContainer.appendChild(evEl);
         });
         
@@ -353,19 +351,33 @@
 
     function showDetail(ev) {
         const modal = document.getElementById('modal');
-        document.getElementById('modalTitle').innerText = ev['IMPUTADO'] || 'Detalle';
+        const container = document.getElementById('modalContainer');
+        document.getElementById('modalTitle').innerText = ev['IMPUTADO'] || 'Detalle de Audiencia';
         document.getElementById('modalSubtitle').innerText = ev['TIPO DE AUDIENCIA'] || 'Audiencia';
         const content = document.getElementById('modalContent');
         content.innerHTML = fields.map(f => `
             <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                <span class="text-[9px] uppercase font-bold text-gray-400 block tracking-wider">${f}</span>
-                <span class="text-sm text-slate-700 font-medium">${ev[f] || '—'}</span>
+                <span class="text-[9px] uppercase font-bold text-gray-400 block tracking-widest">${f}</span>
+                <span class="text-sm text-slate-700 font-semibold">${ev[f] || '—'}</span>
             </div>
         `).join('');
+        
         modal.classList.remove('hidden');
+        setTimeout(() => {
+            container.classList.remove('scale-95', 'opacity-0');
+            container.classList.add('scale-100', 'opacity-100');
+        }, 10);
     }
 
-    function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+    function closeModal() {
+        const container = document.getElementById('modalContainer');
+        container.classList.remove('scale-100', 'opacity-100');
+        container.classList.add('scale-95', 'opacity-0');
+        setTimeout(() => {
+            document.getElementById('modal').classList.add('hidden');
+        }, 200);
+    }
+
     function changeMonth(delta) { currentViewDate.setMonth(currentViewDate.getMonth() + delta); renderCalendar(); }
     function setToday() { currentViewDate = new Date(); renderCalendar(); }
     function applyFilters() { renderCalendar(); }
