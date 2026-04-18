@@ -8,10 +8,10 @@
     <style>
         .calendar-grid {
             display: grid;
-            grid-template-columns: repeat(7, 1fr); /* 7 columnas iguales (1/7 cada una) */
+            grid-template-columns: repeat(7, 1fr); /* 7 columnas iguales obligatorias */
+            width: 100%;
             border-left: 1px solid #e5e7eb;
             border-top: 1px solid #e5e7eb;
-            width: 100%;
         }
         .calendar-day {
             aspect-ratio: 1 / 1;
@@ -23,7 +23,6 @@
             position: relative;
             display: flex;
             flex-direction: column;
-            width: 100%; /* Asegura que llene su celda del grid */
         }
         .day-header {
             font-size: 0.75rem;
@@ -57,7 +56,7 @@
             white-space: normal;
             background-color: #dbeafe;
             z-index: 50;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
             height: auto;
             min-height: fit-content;
         }
@@ -100,7 +99,7 @@
     <header class="flex flex-col md:flex-row justify-between items-center mb-6 bg-white p-4 rounded-xl shadow-sm gap-4">
         <div>
             <h1 class="text-2xl font-bold text-slate-800">Calendario de Audiencias</h1>
-            <p id="currentMonthDisplay" class="text-blue-600 font-medium tracking-tight"></p>
+            <p id="currentMonthDisplay" class="text-blue-600 font-medium tracking-tight uppercase"></p>
         </div>
         
         <div class="flex items-center gap-2">
@@ -114,7 +113,7 @@
         </div>
 
         <div class="hidden md:block">
-            <span class="text-[10px] text-gray-400 bg-gray-50 px-2 py-1 rounded border">Sincronización Automática Activa</span>
+            <span class="text-[10px] text-gray-400 bg-gray-50 px-2 py-1 rounded border uppercase font-bold">Sincronización Automática</span>
         </div>
     </header>
 
@@ -138,14 +137,15 @@
     </section>
 
     <div class="bg-white rounded-xl shadow-xl overflow-hidden border border-gray-200">
+        <!-- Encabezados de días integrados en el grid de 7 columnas -->
         <div class="grid grid-cols-7 bg-gray-100 border-b border-gray-200">
-            <div class="py-3 text-center text-xs font-bold text-gray-500 uppercase">Domingo</div>
-            <div class="py-3 text-center text-xs font-bold text-gray-500 uppercase">Lunes</div>
-            <div class="py-3 text-center text-xs font-bold text-gray-500 uppercase">Martes</div>
-            <div class="py-3 text-center text-xs font-bold text-gray-500 uppercase">Miércoles</div>
-            <div class="py-3 text-center text-xs font-bold text-gray-500 uppercase">Jueves</div>
-            <div class="py-3 text-center text-xs font-bold text-gray-500 uppercase">Viernes</div>
-            <div class="py-3 text-center text-xs font-bold text-gray-500 uppercase">Sábado</div>
+            <div class="py-3 text-center text-[10px] font-bold text-gray-500 uppercase">Dom</div>
+            <div class="py-3 text-center text-[10px] font-bold text-gray-500 uppercase">Lun</div>
+            <div class="py-3 text-center text-[10px] font-bold text-gray-500 uppercase">Mar</div>
+            <div class="py-3 text-center text-[10px] font-bold text-gray-500 uppercase">Mié</div>
+            <div class="py-3 text-center text-[10px] font-bold text-gray-500 uppercase">Jue</div>
+            <div class="py-3 text-center text-[10px] font-bold text-gray-500 uppercase">Vie</div>
+            <div class="py-3 text-center text-[10px] font-bold text-gray-500 uppercase">Sáb</div>
         </div>
         <div id="calendarGrid" class="calendar-grid"></div>
     </div>
@@ -179,30 +179,24 @@
         const url = document.getElementById('csvUrl').value;
         const loadingOverlay = document.getElementById('loading');
         const errorInstructions = document.getElementById('errorInstructions');
-        const spinner = document.getElementById('spinner');
-        const loadingText = document.getElementById('loadingText');
 
         loadingOverlay.style.display = 'flex';
         errorInstructions.classList.add('hidden');
-        spinner.classList.remove('hidden');
-        loadingText.classList.remove('hidden');
 
         try {
             const response = await fetch(url);
-            if (!response.ok) throw new Error("Status: " + response.status);
+            if (!response.ok) throw new Error("Error en red");
             
             const text = await response.text();
             const rows = parseCsvRobust(text);
             
-            if (rows.length < 2) throw new Error("Documento sin datos.");
+            if (rows.length < 2) throw new Error("Sin datos");
 
             const headers = rows[0].map(h => h.trim().toUpperCase());
             
             allAudiencias = rows.slice(1).map(row => {
                 let obj = {};
-                headers.forEach((h, i) => {
-                    obj[h] = row[i] ? row[i].trim() : "";
-                });
+                headers.forEach((h, i) => { obj[h] = row[i] ? row[i].trim() : ""; });
                 return obj;
             }).filter(a => a["FECHA AGENDAMIENTO"]);
 
@@ -210,9 +204,9 @@
             renderCalendar();
             loadingOverlay.style.display = 'none';
         } catch (e) {
-            console.error("Fetch error:", e);
-            spinner.classList.add('hidden');
-            loadingText.classList.add('hidden');
+            console.error(e);
+            document.getElementById('spinner').classList.add('hidden');
+            document.getElementById('loadingText').classList.add('hidden');
             errorInstructions.classList.remove('hidden');
         }
     }
@@ -241,33 +235,20 @@
 
     function splitNames(cellContent) {
         if (!cellContent) return [];
-        return cellContent.split(',')
-            .map(name => name.trim())
-            .filter(name => name.length > 2);
+        return cellContent.split(',').map(name => name.trim()).filter(name => name.length > 2);
     }
 
     function populateFilters() {
-        const config = {
-            'filterJuez': 'JUEZ',
-            'filterFiscal': 'FISCAL',
-            'filterMPD': 'MPD',
-            'filterAbog': 'ABOG. PARTIC.'
-        };
-
+        const config = { 'filterJuez': 'JUEZ', 'filterFiscal': 'FISCAL', 'filterMPD': 'MPD', 'filterAbog': 'ABOG. PARTIC.' };
         Object.entries(config).forEach(([id, field]) => {
             const select = document.getElementById(id);
             const allNames = [];
-            allAudiencias.forEach(a => {
-                const namesInCell = splitNames(a[field]);
-                namesInCell.forEach(name => allNames.push(name));
-            });
-
+            allAudiencias.forEach(a => splitNames(a[field]).forEach(n => allNames.push(n)));
             const uniqueValues = [...new Set(allNames)].sort();
             select.innerHTML = '<option value="">Todos</option>';
             uniqueValues.forEach(val => {
                 const opt = document.createElement('option');
-                opt.value = val;
-                opt.innerText = val;
+                opt.value = val; opt.innerText = val;
                 select.appendChild(opt);
             });
         });
@@ -281,9 +262,9 @@
         const month = currentViewDate.getMonth();
         
         const monthTitle = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(currentViewDate);
-        document.getElementById('currentMonthDisplay').innerText = monthTitle.toUpperCase();
+        document.getElementById('currentMonthDisplay').innerText = monthTitle;
 
-        const firstDayOfMonth = new Date(year, month, 1).getDay();
+        const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0=Dom, 1=Lun...
         const daysInMonth = new Date(year, month + 1, 0).getDate();
         const prevMonthLastDay = new Date(year, month, 0).getDate();
 
@@ -293,31 +274,30 @@
         const fA = document.getElementById('filterAbog').value;
 
         const filtered = allAudiencias.filter(a => {
-            const match = (filterValue, cellValue) => {
-                if (!filterValue) return true;
-                const namesInCell = splitNames(cellValue);
-                return namesInCell.includes(filterValue);
-            };
+            const match = (f, v) => !f || splitNames(v).includes(f);
             return match(fJ, a['JUEZ']) && match(fF, a['FISCAL']) && match(fM, a['MPD']) && match(fA, a['ABOG. PARTIC.']);
         });
 
+        // Días mes anterior
         for (let i = firstDayOfMonth - 1; i >= 0; i--) createDayCell(prevMonthLastDay - i, true);
 
+        // Días mes actual
         for (let i = 1; i <= daysInMonth; i++) {
             const dayEvents = filtered.filter(a => {
-                const fechaRaw = a['FECHA AGENDAMIENTO'];
-                if (!fechaRaw) return false;
+                const f = a['FECHA AGENDAMIENTO'];
+                if (!f) return false;
                 let d, m, y;
-                if (fechaRaw.includes('-')) [y, m, d] = fechaRaw.split('-');
-                else if (fechaRaw.includes('/')) [d, m, y] = fechaRaw.split('/');
+                if (f.includes('-')) [y, m, d] = f.split('-');
+                else if (f.includes('/')) [d, m, y] = f.split('/');
                 return parseInt(y) === year && parseInt(m) === (month + 1) && parseInt(d) === i;
             });
             dayEvents.sort((a, b) => (a['HORA PROGRAMADA INICIO'] || "").localeCompare(b['HORA PROGRAMADA INICIO'] || ""));
             createDayCell(i, false, dayEvents);
         }
         
-        const totalCellsShown = firstDayOfMonth + daysInMonth;
-        const remaining = 42 - totalCellsShown;
+        // Días mes siguiente para completar grid de 6 semanas (42 celdas)
+        const totalShown = firstDayOfMonth + daysInMonth;
+        const remaining = 42 - totalShown;
         for (let i = 1; i <= remaining; i++) createDayCell(i, true);
     }
 
@@ -332,27 +312,25 @@
         }
 
         cell.innerHTML = `<div class="day-header">${dayNumber}</div>`;
-        const eventContainer = document.createElement('div');
-        eventContainer.className = "event-container";
+        const container = document.createElement('div');
+        container.className = "event-container";
         
         events.forEach(ev => {
             const evEl = document.createElement('div');
             evEl.className = 'event-card';
-            const hora = ev['HORA PROGRAMADA INICIO'] || '--:--';
-            const imputado = ev['IMPUTADO'] || 'N/A';
-            evEl.innerHTML = `<strong>${hora}</strong> ${imputado}`;
+            evEl.innerHTML = `<strong>${ev['HORA PROGRAMADA INICIO'] || '--:--'}</strong> ${ev['IMPUTADO'] || 'N/A'}`;
             evEl.onclick = (e) => { e.stopPropagation(); showDetail(ev); };
-            eventContainer.appendChild(evEl);
+            container.appendChild(evEl);
         });
         
-        cell.appendChild(eventContainer);
+        cell.appendChild(container);
         grid.appendChild(cell);
     }
 
     function showDetail(ev) {
         const modal = document.getElementById('modal');
         const container = document.getElementById('modalContainer');
-        document.getElementById('modalTitle').innerText = ev['IMPUTADO'] || 'Detalle de Audiencia';
+        document.getElementById('modalTitle').innerText = ev['IMPUTADO'] || 'Detalle';
         document.getElementById('modalSubtitle').innerText = ev['TIPO DE AUDIENCIA'] || 'Audiencia';
         const content = document.getElementById('modalContent');
         content.innerHTML = fields.map(f => `
@@ -373,15 +351,12 @@
         const container = document.getElementById('modalContainer');
         container.classList.remove('scale-100', 'opacity-100');
         container.classList.add('scale-95', 'opacity-0');
-        setTimeout(() => {
-            document.getElementById('modal').classList.add('hidden');
-        }, 200);
+        setTimeout(() => { document.getElementById('modal').classList.add('hidden'); }, 200);
     }
 
     function changeMonth(delta) { currentViewDate.setMonth(currentViewDate.getMonth() + delta); renderCalendar(); }
     function setToday() { currentViewDate = new Date(); renderCalendar(); }
     function applyFilters() { renderCalendar(); }
-    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
     window.onload = fetchData;
 </script>
 </body>
