@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Gestión de Audiencias</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            border-left: 1px solid #e5e7eb;
+            border-top: 1px solid #e5e7eb;
+        }
+        .calendar-day {
+            min-height: 120px;
+            border-right: 1px solid #e5e7eb;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 4px;
+            background-color: #fff;
+        }
+        .day-header {
+            font-size: 0.75rem;
+            font-weight: bold;
+            color: #6b7280;
+            text-align: right;
+            padding-bottom: 4px;
+        }
+        .event-card {
+            font-size: 0.7rem;
+            line-height: 1.1;
+            padding: 4px;
+            margin-bottom: 2px;
+            border-radius: 4px;
+            background-color: #eff6ff;
+            border: 1px solid #bfdbfe;
+            color: #1e40af;
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .event-card:hover {
+            background-color: #dbeafe;
+            white-space: normal;
+            z-index: 10;
+            position: relative;
+        }
+        .current-day {
+            background-color: #fefce8;
+        }
+        .other-month {
+            background-color: #f9fafb;
+            color: #d1d5db;
+        }
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(255,255,255,0.7);
+            z-index: 100;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-900">
+
+<div id="loading" class="loading-overlay">
+    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+    <p class="mt-2 text-sm font-medium text-gray-600">Sincronizando con Google Sheets...</p>
+</div>
+
+<div class="max-w-[1400px] mx-auto p-4">
+    <header class="flex flex-col md:flex-row justify-between items-center mb-6 bg-white p-4 rounded-xl shadow-sm gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-800">Calendario de Audiencias</h1>
+            <p id="currentMonthDisplay" class="text-blue-600 font-medium"></p>
+        </div>
+        
+        <div class="flex items-center gap-2">
+            <button onclick="changeMonth(-1)" class="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button onclick="setToday()" class="px-4 py-2 border rounded-md text-sm hover:bg-gray-50 font-medium">Hoy</button>
+            <button onclick="changeMonth(1)" class="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+        </div>
+
+        <div class="flex flex-col gap-1">
+            <div class="flex gap-2">
+                <input type="text" id="csvUrl" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vTiYlQcx2Ix6HBhosnbGJH4oEG_A6faRFZRK1v5gfMHNxuqwJidrIIHVlX9EMbvV8MQbaxGWbE_45jd/pub?output=csv" class="text-sm p-2 border rounded-md w-64 focus:ring-2 focus:ring-blue-500 outline-none" />
+                <button onclick="fetchData()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-bold transition-colors">Sincronizar</button>
+            </div>
+            <span class="text-[10px] text-gray-400">Datos cargados desde el documento publicado</span>
+        </div>
+    </header>
+
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+        <div>
+            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Juez</label>
+            <select id="filterJuez" onchange="applyFilters()" class="w-full border p-2 rounded-md text-sm bg-gray-50"></select>
+        </div>
+        <div>
+            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Fiscal</label>
+            <select id="filterFiscal" onchange="applyFilters()" class="w-full border p-2 rounded-md text-sm bg-gray-50"></select>
+        </div>
+        <div>
+            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">MPD</label>
+            <select id="filterMPD" onchange="applyFilters()" class="w-full border p-2 rounded-md text-sm bg-gray-50"></select>
+        </div>
+        <div>
+            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Abog. Partic.</label>
+            <select id="filterAbog" onchange="applyFilters()" class="w-full border p-2 rounded-md text-sm bg-gray-50"></select>
+        </div>
+    </section>
+
+    <div class="bg-white rounded-xl shadow-xl overflow-hidden border border-gray-200">
+        <div class="grid grid-cols-7 bg-gray-100 border-b border-gray-200">
+            <div class="py-3 text-center text-xs font-bold text-gray-500 uppercase">Domingo</div>
+            <div class="py-3 text-center text-xs font-bold text-gray-500 uppercase">Lunes</div>
+            <div class="py-3 text-center text-xs font-bold text-gray-500 uppercase">Martes</div>
+            <div class="py-3 text-center text-xs font-bold text-gray-500 uppercase">Miércoles</div>
+            <div class="py-3 text-center text-xs font-bold text-gray-500 uppercase">Jueves</div>
+            <div class="py-3 text-center text-xs font-bold text-gray-500 uppercase">Viernes</div>
+            <div class="py-3 text-center text-xs font-bold text-gray-500 uppercase">Sábado</div>
+        </div>
+        <div id="calendarGrid" class="calendar-grid"></div>
+    </div>
+</div>
+
+<div id="modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl transform transition-all">
+        <div class="flex justify-between items-start mb-4 border-b pb-4">
+            <div>
+                <h2 id="modalTitle" class="text-xl font-bold text-slate-800"></h2>
+                <p id="modalSubtitle" class="text-sm text-blue-600 font-medium"></p>
+            </div>
+            <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+        </div>
+        <div id="modalContent" class="grid grid-cols-1 gap-4 max-h-[60vh] overflow-y-auto pr-2"></div>
+        <button onclick="closeModal()" class="mt-6 w-full bg-slate-800 text-white hover:bg-slate-900 py-3 rounded-xl font-bold transition-colors">Cerrar</button>
+    </div>
+</div>
+
+<script>
+    let allAudiencias = [];
+    let currentViewDate = new Date();
+    
+    const fields = [
+        "CUIJ", "IMPUTADO", "TIPO DE AUDIENCIA", "FECHA AGENDAMIENTO", 
+        "HORA PROGRAMADA INICIO", "SALA", "UBICACION IMPUTADO", 
+        "JUEZ", "FISCAL", "MPD", "ABOG. PARTIC."
+    ];
+
+    /**
+     * Procesa la URL para asegurar que pide el CSV de la hoja AUDIENCIAS si es posible
+     */
+    function processUrl(input) {
+        if (!input) return null;
+        if (input.includes('/d/e/') && !input.includes('gid=')) {
+            // Si es URL de publicación completa, intentamos forzar la descarga de la hoja correcta si se conoce el GID,
+            // pero por ahora usamos la URL tal cual ya que viene pre-configurada.
+            return input;
+        }
+        return input;
+    }
+
+    async function fetchData() {
+        const inputUrl = document.getElementById('csvUrl').value.trim();
+        const url = processUrl(inputUrl);
+        
+        if (!url) return;
+
+        document.getElementById('loading').style.display = 'flex';
+
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error("Error de conexión con la planilla.");
+            
+            const text = await response.text();
+            const rows = parseCsvRobust(text);
+            
+            if (rows.length < 2) throw new Error("Documento vacío o sin formato esperado.");
+
+            // Normalización de cabeceras
+            const headers = rows[0].map(h => h.trim().toUpperCase());
+            
+            // Mapeo de datos
+            allAudiencias = rows.slice(1).map(row => {
+                let obj = {};
+                headers.forEach((h, i) => {
+                    obj[h] = row[i] ? row[i].trim() : "";
+                });
+                return obj;
+            }).filter(a => a["FECHA AGENDAMIENTO"]); // Filtramos filas vacías
+
+            populateFilters();
+            renderCalendar();
+        } catch (e) {
+            console.error(e);
+            alert("ERROR AL CARGAR DATOS: " + e.message);
+        } finally {
+            document.getElementById('loading').style.display = 'none';
+        }
+    }
+
+    function parseCsvRobust(text) {
+        const rows = [];
+        const lines = text.split(/\r?\n/);
+        
+        lines.forEach(line => {
+            if (!line.trim()) return;
+            const row = [];
+            let inQuotes = false;
+            let currentValue = '';
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    row.push(currentValue);
+                    currentValue = '';
+                } else {
+                    currentValue += char;
+                }
+            }
+            row.push(currentValue);
+            rows.push(row);
+        });
+        return rows;
+    }
+
+    function populateFilters() {
+        const config = {
+            'filterJuez': 'JUEZ',
+            'filterFiscal': 'FISCAL',
+            'filterMPD': 'MPD',
+            'filterAbog': 'ABOG. PARTIC.'
+        };
+
+        Object.entries(config).forEach(([id, field]) => {
+            const select = document.getElementById(id);
+            const uniqueValues = [...new Set(allAudiencias.map(a => a[field]))]
+                .filter(v => v && v.length > 1)
+                .sort();
+            
+            select.innerHTML = '<option value="">Todos</option>';
+            uniqueValues.forEach(val => {
+                const opt = document.createElement('option');
+                opt.value = val;
+                opt.innerText = val;
+                select.appendChild(opt);
+            });
+        });
+    }
+
+    function renderCalendar() {
+        const grid = document.getElementById('calendarGrid');
+        grid.innerHTML = '';
+        
+        const year = currentViewDate.getFullYear();
+        const month = currentViewDate.getMonth();
+        
+        const monthTitle = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(currentViewDate);
+        document.getElementById('currentMonthDisplay').innerText = monthTitle.toUpperCase();
+
+        const firstDayOfMonth = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const prevMonthLastDay = new Date(year, month, 0).getDate();
+
+        const fJ = document.getElementById('filterJuez').value;
+        const fF = document.getElementById('filterFiscal').value;
+        const fM = document.getElementById('filterMPD').value;
+        const fA = document.getElementById('filterAbog').value;
+
+        const filtered = allAudiencias.filter(a => {
+            return (!fJ || a['JUEZ'] === fJ) &&
+                   (!fF || a['FISCAL'] === fF) &&
+                   (!fM || a['MPD'] === fM) &&
+                   (!fA || a['ABOG. PARTIC.'] === fA);
+        });
+
+        // Mes anterior
+        for (let i = firstDayOfMonth - 1; i >= 0; i--) {
+            createDayCell(prevMonthLastDay - i, true);
+        }
+
+        // Mes actual
+        for (let i = 1; i <= daysInMonth; i++) {
+            const dayEvents = filtered.filter(a => {
+                const fechaRaw = a['FECHA AGENDAMIENTO'];
+                if (!fechaRaw) return false;
+                
+                let d, m, y;
+                if (fechaRaw.includes('-')) {
+                    [y, m, d] = fechaRaw.split('-');
+                } else if (fechaRaw.includes('/')) {
+                    [d, m, y] = fechaRaw.split('/');
+                }
+                return parseInt(y) === year && parseInt(m) === (month + 1) && parseInt(d) === i;
+            });
+            
+            dayEvents.sort((a, b) => (a['HORA PROGRAMADA INICIO'] || "").localeCompare(b['HORA PROGRAMADA INICIO'] || ""));
+            createDayCell(i, false, dayEvents);
+        }
+        
+        // Relleno final
+        const totalCells = firstDayOfMonth + daysInMonth;
+        const remaining = 42 - totalCells;
+        for (let i = 1; i <= remaining; i++) {
+            createDayCell(i, true);
+        }
+    }
+
+    function createDayCell(dayNumber, isOtherMonth, events = []) {
+        const grid = document.getElementById('calendarGrid');
+        const cell = document.createElement('div');
+        cell.className = `calendar-day ${isOtherMonth ? 'other-month' : ''}`;
+        
+        const today = new Date();
+        if (!isOtherMonth && dayNumber === today.getDate() && currentViewDate.getMonth() === today.getMonth() && currentViewDate.getFullYear() === today.getFullYear()) {
+            cell.classList.add('current-day');
+        }
+
+        cell.innerHTML = `<div class="day-header">${dayNumber}</div>`;
+        const eventContainer = document.createElement('div');
+        eventContainer.className = "flex flex-col gap-1 overflow-y-auto max-h-[90px]";
+        
+        events.forEach(ev => {
+            const evEl = document.createElement('div');
+            evEl.className = 'event-card';
+            const hora = ev['HORA PROGRAMADA INICIO'] || '--:--';
+            const imputado = ev['IMPUTADO'] || 'SIN NOMBRE';
+            evEl.innerHTML = `<strong>${hora}</strong> ${imputado}`;
+            evEl.onclick = () => showDetail(ev);
+            eventContainer.appendChild(evEl);
+        });
+        
+        cell.appendChild(eventContainer);
+        grid.appendChild(cell);
+    }
+
+    function showDetail(ev) {
+        const modal = document.getElementById('modal');
+        document.getElementById('modalTitle').innerText = ev['IMPUTADO'] || 'Detalle';
+        document.getElementById('modalSubtitle').innerText = ev['TIPO DE AUDIENCIA'] || 'Audiencia';
+        
+        const content = document.getElementById('modalContent');
+        content.innerHTML = fields.map(f => `
+            <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                <span class="text-[9px] uppercase font-bold text-gray-400 block tracking-wider">${f}</span>
+                <span class="text-sm text-slate-700 font-medium">${ev[f] || '—'}</span>
+            </div>
+        `).join('');
+        
+        modal.classList.remove('hidden');
+    }
+
+    function closeModal() {
+        document.getElementById('modal').classList.add('hidden');
+    }
+
+    function changeMonth(delta) {
+        currentViewDate.setMonth(currentViewDate.getMonth() + delta);
+        renderCalendar();
+    }
+
+    function setToday() {
+        currentViewDate = new Date();
+        renderCalendar();
+    }
+
+    function applyFilters() {
+        renderCalendar();
+    }
+
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeModal();
+    });
+
+    // Carga inicial automática
+    window.onload = fetchData;
+</script>
+</body>
+</html>
