@@ -8,13 +8,13 @@
     <style>
         .calendar-grid {
             display: grid;
-            grid-template-columns: repeat(7, 1fr);
+            grid-template-columns: repeat(7, 1fr); /* 7 columnas iguales (1/7 cada una) */
             border-left: 1px solid #e5e7eb;
             border-top: 1px solid #e5e7eb;
             width: 100%;
         }
         .calendar-day {
-            aspect-ratio: 1 / 1; /* Mantiene proporciones cuadradas */
+            aspect-ratio: 1 / 1;
             min-height: 120px;
             border-right: 1px solid #e5e7eb;
             border-bottom: 1px solid #e5e7eb;
@@ -23,6 +23,7 @@
             position: relative;
             display: flex;
             flex-direction: column;
+            width: 100%; /* Asegura que llene su celda del grid */
         }
         .day-header {
             font-size: 0.75rem;
@@ -33,7 +34,7 @@
         }
         .event-container {
             flex-grow: 1;
-            overflow-y: visible; /* Permite que el hover se expanda */
+            overflow-y: visible;
         }
         .event-card {
             font-size: 0.7rem;
@@ -93,7 +94,6 @@
     </div>
 </div>
 
-<!-- Input oculto para la URL de datos (Operación interna) -->
 <input type="hidden" id="csvUrl" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vTiYlQcx2Ix6HBhosnbGJH4oEG_A6faRFZRK1v5gfMHNxuqwJidrIIHVlX9EMbvV8MQbaxGWbE_45jd/pub?gid=0&single=true&output=csv" />
 
 <div class="max-w-[1400px] mx-auto p-4">
