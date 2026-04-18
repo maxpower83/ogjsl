@@ -57,19 +57,30 @@
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(255,255,255,0.7);
+            background: rgba(255,255,255,0.85);
             z-index: 100;
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            text-align: center;
+            padding: 20px;
         }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-900">
 
 <div id="loading" class="loading-overlay">
-    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-    <p class="mt-2 text-sm font-medium text-gray-600">Sincronizando con Google Sheets...</p>
+    <div id="spinner" class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+    <div id="loadingText" class="text-sm font-medium text-gray-600">Sincronizando con Google Sheets...</div>
+    <div id="errorInstructions" class="hidden mt-4 p-4 bg-red-50 border border-red-200 rounded-lg max-w-md">
+        <p class="text-red-700 font-bold mb-2">Error de conexión (CORS)</p>
+        <p class="text-xs text-red-600 mb-4">Si estás ejecutando este archivo localmente, el navegador bloquea la conexión por seguridad.</p>
+        <div class="text-left text-xs text-gray-700 space-y-2">
+            <p><strong>Solución A:</strong> Sube este archivo HTML a un hosting (GitHub Pages, Netlify, etc).</p>
+            <p><strong>Solución B:</strong> Instala la extensión "Allow CORS" en Chrome y actívala.</p>
+        </div>
+        <button onclick="location.reload()" class="mt-4 bg-red-600 text-white px-4 py-2 rounded text-xs font-bold">Reintentar</button>
+    </div>
 </div>
 
 <div class="max-w-[1400px] mx-auto p-4">
@@ -91,10 +102,10 @@
 
         <div class="flex flex-col gap-1">
             <div class="flex gap-2">
-                <input type="text" id="csvUrl" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vTiYlQcx2Ix6HBhosnbGJH4oEG_A6faRFZRK1v5gfMHNxuqwJidrIIHVlX9EMbvV8MQbaxGWbE_45jd/pub?output=csv" class="text-sm p-2 border rounded-md w-64 focus:ring-2 focus:ring-blue-500 outline-none" />
+                <input type="text" id="csvUrl" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vTiYlQcx2Ix6HBhosnbGJH4oEG_A6faRFZRK1v5gfMHNxuqwJidrIIHVlX9EMbvV8MQbaxGWbE_45jd/pub?gid=0&single=true&output=csv" class="text-sm p-2 border rounded-md w-64 focus:ring-2 focus:ring-blue-500 outline-none" />
                 <button onclick="fetchData()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-bold transition-colors">Sincronizar</button>
             </div>
-            <span class="text-[10px] text-gray-400">Datos cargados desde el documento publicado</span>
+            <span class="text-[10px] text-gray-400">Datos cargados desde la hoja AUDIENCIAS</span>
         </div>
     </header>
 
@@ -155,83 +166,78 @@
         "JUEZ", "FISCAL", "MPD", "ABOG. PARTIC."
     ];
 
-    /**
-     * Procesa la URL para asegurar que pide el CSV de la hoja AUDIENCIAS si es posible
-     */
-    function processUrl(input) {
-        if (!input) return null;
-        if (input.includes('/d/e/') && !input.includes('gid=')) {
-            // Si es URL de publicación completa, intentamos forzar la descarga de la hoja correcta si se conoce el GID,
-            // pero por ahora usamos la URL tal cual ya que viene pre-configurada.
-            return input;
-        }
-        return input;
-    }
-
     async function fetchData() {
-        const inputUrl = document.getElementById('csvUrl').value.trim();
-        const url = processUrl(inputUrl);
-        
-        if (!url) return;
+        const url = document.getElementById('csvUrl').value.trim();
+        const loadingOverlay = document.getElementById('loading');
+        const errorInstructions = document.getElementById('errorInstructions');
+        const spinner = document.getElementById('spinner');
+        const loadingText = document.getElementById('loadingText');
 
-        document.getElementById('loading').style.display = 'flex';
+        loadingOverlay.style.display = 'flex';
+        errorInstructions.classList.add('hidden');
+        spinner.classList.remove('hidden');
+        loadingText.classList.remove('hidden');
 
         try {
             const response = await fetch(url);
-            if (!response.ok) throw new Error("Error de conexión con la planilla.");
+            if (!response.ok) throw new Error("Status: " + response.status);
             
             const text = await response.text();
             const rows = parseCsvRobust(text);
             
-            if (rows.length < 2) throw new Error("Documento vacío o sin formato esperado.");
+            if (rows.length < 2) throw new Error("Documento sin datos.");
 
-            // Normalización de cabeceras
             const headers = rows[0].map(h => h.trim().toUpperCase());
             
-            // Mapeo de datos
             allAudiencias = rows.slice(1).map(row => {
                 let obj = {};
                 headers.forEach((h, i) => {
                     obj[h] = row[i] ? row[i].trim() : "";
                 });
                 return obj;
-            }).filter(a => a["FECHA AGENDAMIENTO"]); // Filtramos filas vacías
+            }).filter(a => a["FECHA AGENDAMIENTO"]);
 
             populateFilters();
             renderCalendar();
+            loadingOverlay.style.display = 'none';
         } catch (e) {
-            console.error(e);
-            alert("ERROR AL CARGAR DATOS: " + e.message);
-        } finally {
-            document.getElementById('loading').style.display = 'none';
+            console.error("Fetch error:", e);
+            spinner.classList.add('hidden');
+            loadingText.classList.add('hidden');
+            errorInstructions.classList.remove('hidden');
         }
     }
 
     function parseCsvRobust(text) {
         const rows = [];
         const lines = text.split(/\r?\n/);
-        
         lines.forEach(line => {
             if (!line.trim()) return;
             const row = [];
             let inQuotes = false;
             let currentValue = '';
-            
             for (let i = 0; i < line.length; i++) {
                 const char = line[i];
-                if (char === '"') {
-                    inQuotes = !inQuotes;
-                } else if (char === ',' && !inQuotes) {
+                if (char === '"') inQuotes = !inQuotes;
+                else if (char === ',' && !inQuotes) {
                     row.push(currentValue);
                     currentValue = '';
-                } else {
-                    currentValue += char;
-                }
+                } else currentValue += char;
             }
             row.push(currentValue);
             rows.push(row);
         });
         return rows;
+    }
+
+    /**
+     * Extrae nombres individuales de una celda que puede contener varios separados por comas
+     */
+    function splitNames(cellContent) {
+        if (!cellContent) return [];
+        return cellContent.split(',')
+            .map(name => name.trim())
+            .filter(name => name.length > 2);
     }
 
     function populateFilters() {
@@ -244,9 +250,15 @@
 
         Object.entries(config).forEach(([id, field]) => {
             const select = document.getElementById(id);
-            const uniqueValues = [...new Set(allAudiencias.map(a => a[field]))]
-                .filter(v => v && v.length > 1)
-                .sort();
+            
+            // Extraer todos los nombres individuales de todas las filas
+            const allNames = [];
+            allAudiencias.forEach(a => {
+                const namesInCell = splitNames(a[field]);
+                namesInCell.forEach(name => allNames.push(name));
+            });
+
+            const uniqueValues = [...new Set(allNames)].sort();
             
             select.innerHTML = '<option value="">Todos</option>';
             uniqueValues.forEach(val => {
@@ -278,42 +290,37 @@
         const fA = document.getElementById('filterAbog').value;
 
         const filtered = allAudiencias.filter(a => {
-            return (!fJ || a['JUEZ'] === fJ) &&
-                   (!fF || a['FISCAL'] === fF) &&
-                   (!fM || a['MPD'] === fM) &&
-                   (!fA || a['ABOG. PARTIC.'] === fA);
+            // Lógica de coincidencia parcial para manejar nombres individuales dentro de una celda con múltiples nombres
+            const match = (filterValue, cellValue) => {
+                if (!filterValue) return true;
+                const namesInCell = splitNames(cellValue);
+                return namesInCell.includes(filterValue);
+            };
+
+            return match(fJ, a['JUEZ']) &&
+                   match(fF, a['FISCAL']) &&
+                   match(fM, a['MPD']) &&
+                   match(fA, a['ABOG. PARTIC.']);
         });
 
-        // Mes anterior
-        for (let i = firstDayOfMonth - 1; i >= 0; i--) {
-            createDayCell(prevMonthLastDay - i, true);
-        }
+        for (let i = firstDayOfMonth - 1; i >= 0; i--) createDayCell(prevMonthLastDay - i, true);
 
-        // Mes actual
         for (let i = 1; i <= daysInMonth; i++) {
             const dayEvents = filtered.filter(a => {
                 const fechaRaw = a['FECHA AGENDAMIENTO'];
                 if (!fechaRaw) return false;
-                
                 let d, m, y;
-                if (fechaRaw.includes('-')) {
-                    [y, m, d] = fechaRaw.split('-');
-                } else if (fechaRaw.includes('/')) {
-                    [d, m, y] = fechaRaw.split('/');
-                }
+                if (fechaRaw.includes('-')) [y, m, d] = fechaRaw.split('-');
+                else if (fechaRaw.includes('/')) [d, m, y] = fechaRaw.split('/');
                 return parseInt(y) === year && parseInt(m) === (month + 1) && parseInt(d) === i;
             });
-            
             dayEvents.sort((a, b) => (a['HORA PROGRAMADA INICIO'] || "").localeCompare(b['HORA PROGRAMADA INICIO'] || ""));
             createDayCell(i, false, dayEvents);
         }
         
-        // Relleno final
         const totalCells = firstDayOfMonth + daysInMonth;
         const remaining = 42 - totalCells;
-        for (let i = 1; i <= remaining; i++) {
-            createDayCell(i, true);
-        }
+        for (let i = 1; i <= remaining; i++) createDayCell(i, true);
     }
 
     function createDayCell(dayNumber, isOtherMonth, events = []) {
@@ -348,7 +355,6 @@
         const modal = document.getElementById('modal');
         document.getElementById('modalTitle').innerText = ev['IMPUTADO'] || 'Detalle';
         document.getElementById('modalSubtitle').innerText = ev['TIPO DE AUDIENCIA'] || 'Audiencia';
-        
         const content = document.getElementById('modalContent');
         content.innerHTML = fields.map(f => `
             <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
@@ -356,33 +362,14 @@
                 <span class="text-sm text-slate-700 font-medium">${ev[f] || '—'}</span>
             </div>
         `).join('');
-        
         modal.classList.remove('hidden');
     }
 
-    function closeModal() {
-        document.getElementById('modal').classList.add('hidden');
-    }
-
-    function changeMonth(delta) {
-        currentViewDate.setMonth(currentViewDate.getMonth() + delta);
-        renderCalendar();
-    }
-
-    function setToday() {
-        currentViewDate = new Date();
-        renderCalendar();
-    }
-
-    function applyFilters() {
-        renderCalendar();
-    }
-
-    window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeModal();
-    });
-
-    // Carga inicial automática
+    function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+    function changeMonth(delta) { currentViewDate.setMonth(currentViewDate.getMonth() + delta); renderCalendar(); }
+    function setToday() { currentViewDate = new Date(); renderCalendar(); }
+    function applyFilters() { renderCalendar(); }
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
     window.onload = fetchData;
 </script>
 </body>
